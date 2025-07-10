@@ -45,6 +45,30 @@ RUN  set -eux && apk add --no-cache \
     | sort -Vr \
     | head -n1) \
     && \
+    # ModSecurity模块和ModSecurity-nginx模块
+    git clone --depth 1 https://github.com/owasp-modsecurity/ModSecurity \
+    && cd ModSecurity \
+    && git submodule update --init --depth 1 \
+    && ./build.sh \
+    && ./configure \
+    && make -j$(nproc) \
+    && make install && \
+    git clone https://github.com/owasp-modsecurity/ModSecurity-nginx \
+    && cd ModSecurity-nginx \
+    && cd .. && \
+    # Br压缩模块
+    git clone --recurse-submodules -j8 https://github.com/google/ngx_brotli \
+    && \
+    # ZSTD压缩模块
+    wget https://github.com/facebook/zstd/releases/download/v${ZSTD_VERSION}/zstd-${ZSTD_VERSION}.tar.gz \
+    && tar -xzf zstd-${ZSTD_VERSION}.tar.gz \
+    && cd zstd-${ZSTD_VERSION} \
+    && make clean \
+    && CFLAGS="-fPIC" make && make install \
+    && cd .. \
+    && \
+    git clone --depth=10 https://github.com/tokers/zstd-nginx-module.git \
+    && \
     echo "=============版本号=============" && \
     echo "OPENRESTY_VERSION=${OPENRESTY_VERSION}" && \
     echo "OPENSSL_VERSION=${OPENSSL_VERSION}" && \
@@ -101,40 +125,41 @@ RUN  set -eux && apk add --no-cache \
     # make install \
   
     cd openresty-${OPENRESTY_VERSION} && \
-    ./configure \
-    --prefix=/usr/local \
-    --modules-path=/usr/local/nginx/modules \
-    --sbin-path=/usr/local/nginx/sbin/nginx \
-    --conf-path=/usr/local/nginx/conf/nginx.conf \
-    --error-log-path=/data/logs/error.log \
-    --http-log-path=/data/logs/access.log \
-    # --with-cc-opt="-static -O3 -DNGX_LUA_ABORT_AT_PANIC -static-libgcc" \
-    # --with-ld-opt="-static -Wl,--export-dynamic" \
-    --with-cc-opt="-O3 -DNGX_LUA_ABORT_AT_PANIC" \
-    --with-ld-opt="-Wl,--export-dynamic" \
-    --with-openssl=../openssl-${OPENSSL_VERSION} \
-    --with-zlib=../zlib-${ZLIB_VERSION} \
-    --with-pcre=../pcre-${PCRE_VERSION} \
-    --with-pcre-jit \
-    --with-stream \
-    --user=nobody \
-    --group=nobody \
-    --with-stream_ssl_module \
-    --with-stream_ssl_preread_module \
-    --with-http_v2_module \
-    --without-mail_pop3_module \
-    --without-mail_imap_module \
-    --without-mail_smtp_module \
-    --with-http_stub_status_module  \
-    --with-http_realip_module \
-    --with-http_gzip_static_module \
-    --with-http_sub_module \
-    --with-http_gunzip_module \
-    --with-threads \
-    --with-compat \
-    --with-stream=dynamic \
-    --with-http_ssl_module \
-    --with-debug \
+    # ./configure \
+    # --prefix=/usr/local \
+    # --modules-path=/usr/local/nginx/modules \
+    # --sbin-path=/usr/local/nginx/sbin/nginx \
+    # --conf-path=/usr/local/nginx/conf/nginx.conf \
+    # --error-log-path=/data/logs/error.log \
+    # --http-log-path=/data/logs/access.log \
+    # # --with-cc-opt="-static -O3 -DNGX_LUA_ABORT_AT_PANIC -static-libgcc" \
+    # # --with-ld-opt="-static -Wl,--export-dynamic" \
+    # --with-cc-opt="-O3 -DNGX_LUA_ABORT_AT_PANIC" \
+    # --with-ld-opt="-Wl,--export-dynamic" \
+    # --with-openssl=../openssl-${OPENSSL_VERSION} \
+    # --with-zlib=../zlib-${ZLIB_VERSION} \
+    # --with-pcre=../pcre-${PCRE_VERSION} \
+    # --with-pcre-jit \
+    # --with-stream \
+    # --user=nobody \
+    # --group=nobody \
+    # --with-stream_ssl_module \
+    # --with-stream_ssl_preread_module \
+    # --with-http_v2_module \
+    # --without-mail_pop3_module \
+    # --without-mail_imap_module \
+    # --without-mail_smtp_module \
+    # --with-http_stub_status_module  \
+    # --with-http_realip_module \
+    # --with-http_gzip_static_module \
+    # --with-http_sub_module \
+    # --with-http_gunzip_module \
+    # --with-threads \
+    # --with-compat \
+    # --with-stream=dynamic \
+    # --with-http_ssl_module \
+    # --with-debug \
+
     # --without-lua_resty_dns \
     # --without-lua_resty_memcached \
     # --without-lua_redis_parser \
@@ -196,43 +221,71 @@ RUN  set -eux && apk add --no-cache \
     # --with-stream_realip_module \
     # --with-threads \
     # --with-file-aio
+
+    # 编译生成.so模块
+    ./configure \
+    --with-compat \
+    --add-dynamic-module=../ngx_brotli \
+    --add-dynamic-module=../ModSecurity-nginx \
+    --add-dynamic-module=../zstd-nginx-module \
+    && \
+    make modules \
+    # && mv /usr/src/nginx-${NGINX_VERSION} /usr/src/nginx
+    && \
+    # 查看未压缩前的大小
+    du -sh /usr/local/modsecurity/lib && \
+    strip /usr/local/modsecurity/lib/*.so* && \
+    du -sh /usr/local/modsecurity/lib
     
-    && \
-    make -j$(nproc) && \
-    make install \
-    && \
-    # strip /usr/local/nginx/sbin/nginx
-    strip /usr/local/nginx/sbin/nginx && \
-    strip /usr/local/luajit/bin/luajit || true && \
-    strip /usr/local/luajit/lib/libluajit-5.1.so.2 || true && \
-    find /usr/local/nginx/modules -name '*.so' -exec strip {} \; || true && \
-    find /usr/local/lualib -name '*.so' -exec strip {} \; || true
+    # && \
+    # make -j$(nproc) && \
+    # make install \
+    # && \
+    # # strip /usr/local/nginx/sbin/nginx
+    # strip /usr/local/nginx/sbin/nginx && \
+    # strip /usr/local/luajit/bin/luajit || true && \
+    # strip /usr/local/luajit/lib/libluajit-5.1.so.2 || true && \
+    # find /usr/local/nginx/modules -name '*.so' -exec strip {} \; || true && \
+    # find /usr/local/lualib -name '*.so' -exec strip {} \; || true
 
-FROM alpine:latest
+# FROM alpine:latest
+FROM bailangvvking/openresty:latest
 
-RUN apk add --no-cache libgcc
+COPY --from=builder /usr/local/modsecurity/lib/* /usr/lib/
 
-# 复制之前编译好的 openresty, luajit 等文件
-COPY --from=builder /usr/local/nginx /usr/local/nginx
-COPY --from=builder /usr/local/luajit /usr/local/luajit
-COPY --from=builder /usr/local/lualib /usr/local/lualib
-COPY --from=builder /usr/local/bin/openresty /usr/local/bin/
-COPY --from=builder /usr/local/luajit/bin/luajit /usr/local/bin/
+# 环境变量指定动态库搜索路径
+ENV LD_LIBRARY_PATH=/usr/local/modsecurity/lib
 
-# 软连接库路径等操作
-RUN mkdir -p /usr/local/lib \
-    && ln -sf /usr/local/luajit/lib/libluajit-5.1.so.2 /usr/local/lib/ \
-    && ln -sf /usr/local/luajit/lib/libluajit-5.1.so.2.1.ROLLING /usr/local/lib/
+# 创建配置目录并下载必要文件
+RUN set -eux \
+    && apk add --no-cache lua5.1 lua5.1-dev pcre pcre-dev yajl yajl-dev curl \
+    && mkdir -p /etc/nginx/modsec/plugins \
+    && CORERULESET_VERSION=$(curl -s https://api.github.com/repos/coreruleset/coreruleset/releases/latest | grep -oE '"tag_name": "[^"]+' | cut -d'"' -f4 | sed 's/v//') \
+    && wget https://github.com/coreruleset/coreruleset/archive/v${CORERULESET_VERSION}.tar.gz \
+    && tar -xzf v${CORERULESET_VERSION}.tar.gz --strip-components=1 -C /etc/nginx/modsec \
+    && rm -f v${CORERULESET_VERSION}.tar.gz \
+    && wget -P /etc/nginx/modsec/plugins https://raw.githubusercontent.com/coreruleset/wordpress-rule-exclusions-plugin/master/plugins/wordpress-rule-exclusions-before.conf \
+    && wget -P /etc/nginx/modsec/plugins https://raw.githubusercontent.com/coreruleset/wordpress-rule-exclusions-plugin/master/plugins/wordpress-rule-exclusions-config.conf \
+    && wget -P /etc/nginx/modsec/plugins https://raw.githubusercontent.com/kejilion/nginx/main/waf/ldnmp-before.conf \
+    && cp /etc/nginx/modsec/crs-setup.conf.example /etc/nginx/modsec/crs-setup.conf \
+    && echo 'SecAction "id:900110, phase:1, pass, setvar:tx.inbound_anomaly_score_threshold=30, setvar:tx.outbound_anomaly_score_threshold=16"' >> /etc/nginx/modsec/crs-setup.conf \
+    && wget https://raw.githubusercontent.com/owasp-modsecurity/ModSecurity/v3/master/modsecurity.conf-recommended -O /etc/nginx/modsec/modsecurity.conf \
+    && sed -i 's/SecRuleEngine DetectionOnly/SecRuleEngine On/' /etc/nginx/modsec/modsecurity.conf \
+    && sed -i 's/SecPcreMatchLimit [0-9]\+/SecPcreMatchLimit 20000/' /etc/nginx/modsec/modsecurity.conf \
+    && sed -i 's/SecPcreMatchLimitRecursion [0-9]\+/SecPcreMatchLimitRecursion 20000/' /etc/nginx/modsec/modsecurity.conf \
+    && sed -i 's/^SecRequestBodyLimit\s\+[0-9]\+/SecRequestBodyLimit 52428800/' /etc/nginx/modsec/modsecurity.conf \
+    && sed -i 's/^SecRequestBodyNoFilesLimit\s\+[0-9]\+/SecRequestBodyNoFilesLimit 524288/' /etc/nginx/modsec/modsecurity.conf \
+    && sed -i 's/^SecAuditEngine RelevantOnly/SecAuditEngine Off/' /etc/nginx/modsec/modsecurity.conf \
+    && echo 'Include /etc/nginx/modsec/crs-setup.conf' >> /etc/nginx/modsec/modsecurity.conf \
+    && echo 'Include /etc/nginx/modsec/plugins/*-config.conf' >> /etc/nginx/modsec/modsecurity.conf \
+    && echo 'Include /etc/nginx/modsec/plugins/*-before.conf' >> /etc/nginx/modsec/modsecurity.conf \
+    && echo 'Include /etc/nginx/modsec/rules/*.conf' >> /etc/nginx/modsec/modsecurity.conf \
+    && echo 'Include /etc/nginx/modsec/plugins/*-after.conf' >> /etc/nginx/modsec/modsecurity.conf \
+    && ldconfig /usr/lib \
+    && wget https://raw.githubusercontent.com/owasp-modsecurity/ModSecurity/v3/master/unicode.mapping -O /etc/nginx/modsec/unicode.mapping \
+    && apk del curl \
+    && rm -rf /var/cache/apk/*
 
-ENV PATH="/usr/local/nginx/sbin:/usr/local/bin:$PATH"
-ENV LUA_PATH="/usr/local/lualib/?.lua;;"
-ENV LUA_CPATH="/usr/local/lualib/?.so;;"
-ENV LD_LIBRARY_PATH="/usr/local/luajit/lib:$LD_LIBRARY_PATH"
-
-WORKDIR /usr/local/nginx
-
-RUN mkdir -p /data/logs && chown -R nobody:nobody /data/logs /usr/local/nginx
-
-USER nobody
-
-CMD ["nginx", "-g", "daemon off;"]
+EXPOSE 80 443
+WORKDIR /etc/nginx
+CMD ["/usr/sbin/nginx", "-g", "daemon off;"]
