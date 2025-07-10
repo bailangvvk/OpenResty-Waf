@@ -2,6 +2,8 @@
 # FROM alpine:latest AS builder
 FROM bailangvvking/openresty:latest AS builder
 
+USER root
+
 WORKDIR /build
 
 # 安装构建依赖
@@ -259,6 +261,8 @@ RUN set -eux && apk add --no-cache \
 
 # FROM alpine:latest
 FROM bailangvvking/openresty:latest
+
+USER root
 
 COPY --from=builder /usr/local/modsecurity/lib/* /usr/lib/
 
