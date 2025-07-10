@@ -1,29 +1,38 @@
 # FROM alpine:3.20 AS builder
-FROM alpine:latest AS builder
+# FROM alpine:latest AS builder
+FROM bailangvvking/openresty:latest AS builder
 
 WORKDIR /build
 
 # 安装构建依赖
-RUN  set -eux && apk add --no-cache \
+RUN set -eux && apk add --no-cache \
     build-base \
     curl \
-    pcre-dev \
-    zlib-dev \
+    git \
+    bash \
     linux-headers \
+    pcre-dev \
+    pcre2 \
+    pcre2-dev \
+    zlib-dev \
+    openssl-dev \
+    libxml2-dev \
+    libxslt-dev \
+    yajl-dev \
+    lmdb-dev \
+    lua-dev \
+    geoip-dev \
+    brotli-dev \
+    libtool \
+    autoconf \
+    automake \
+    pkgconfig \
     perl \
     sed \
     grep \
-    tar \
-    bash \
-    jq \
-    git \
-    autoconf \
-    automake \
-    libtool \
     make \
-    gcc \
     g++ \
-    tree \
+    wget \
     && \
     # OPENRESTY_VERSION=$(wget --timeout 10 -q -O - https://openresty.org/en/download.html | grep -oE 'openresty-[0-9]+\.[0-9]+\.[0-9]+' | head -n1 | cut -d'-' -f2) \
     OPENRESTY_VERSION=$(wget --timeout=10 -q -O - https://openresty.org/en/download.html \
