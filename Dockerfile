@@ -115,7 +115,6 @@ RUN set -eux && apk add --no-cache \
     # && \
   
     cd openresty-${OPENRESTY_VERSION} && \
-    ./configure \
     # 编译生成.so模块
     ./configure \
     --with-compat \
