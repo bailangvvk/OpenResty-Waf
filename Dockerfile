@@ -119,7 +119,7 @@ RUN set -eux && apk add --no-cache \
     ./configure \
     --with-compat \
     --add-dynamic-module=../ngx_brotli \
-    --add-dynamic-module=../ModSecurity-nginx \
+    # --add-dynamic-module=../ModSecurity-nginx \
     --add-dynamic-module=../zstd-nginx-module \
     && \
     make modules \
